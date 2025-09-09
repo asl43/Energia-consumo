@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EnergyAI Manaus - Otimização Energética AME</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #2E8B57 0%, #228B22 100%); color: #333; min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .location-info { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .card { background: rgba(255, 255, 255, 0.95); border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); }
+        .meter-reading { text-align: center; background: linear-gradient(45deg, #FF6B35, #F7931E); color: white; border-radius: 15px; padding: 20px; }
+        .meter-display { font-size: 2.5rem; font-weight: bold; margin: 15px 0; }
+        .tariff-info { background: #f8f9fa; padding: 15px; border-radius: 10px; margin: 10px 0; }
+        .tariff-row { display: flex; justify-content: space-between; margin: 5px 0; }
+        .input-group { margin: 15px 0; }
+        .input-group label { display: block; font-weight: bold; margin-bottom: 5px; }
+        .input-group input { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; }
+        .input-group input:focus { border-color: #4CAF50; outline: none; }
+        .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .device-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s ease; border-left: 4px solid #4CAF50; }
+        .device-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+        .device-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .device-info { display: flex; align-items: center; }
+        .device-icon { font-size: 2rem; margin-right: 15px; }
+        .device-details { flex-grow: 1; }
+        .device-name { font-weight: bold; font-size: 1.1rem; }
+        .device-specs { color: #666; font-size: 0.9rem; }
+        .power-input { width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; text-align: center; }
+        .hours-input { width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; text-align: center; }
+        .cost-display { background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; }
+        .daily-cost { font-size: 1.1rem; font-weight: bold; color: #1976d2; }
+        .monthly-cost { font-size: 0.9rem; color: #666; }
+        .device-status { padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; cursor: pointer; }
+        .status-on { background: #4CAF50; color: white; }
+        .status-off { background: #f44336; color: white; }
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin: 5px; transition: all 0.3s ease; }
+        .btn-primary { background: #2196F3; color: white; }
+        .btn-success { background: #4CAF50; color: white; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .summary-section { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .cost-breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+        .cost-item { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; }
+        .cost-value { font-size: 1.5rem; font-weight: bold; color: #2196F3; }
+        .recommendations { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .recommendation-item { background: #e8f5e8; border-left: 4px solid #4CAF50; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; }
+        .high-consumption { border-left-color: #f44336 !important; background: #ffebee; }
+        @media (max-width: 768px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .device-grid { grid-template-columns: 1fr; }
+            .header h1 { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ EnergyAI Manaus</h1>
+            <p>Sistema Inteligente de Monitoramento Energético - Amazonas</p>
+            <div class="location-info">
+                <strong>📍 Localização:</strong> Manaus, AM | <strong>⚡ Concessionária:</strong> Amazonas Energia (AME) | <strong>🌡️ Clima:</strong> Tropical Úmido
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <div class="card meter-reading">
+                <h3>📊 Leitura do Relógio</h3>
+                <div class="input-group">
+                    <label for="meterReading">Leitura Atual (kWh):</label>
+                    <input type="number" id="meterReading" value="1524" onchange="energyAI.updateMeterReading()">
+                </div>
+                <div class="meter-display" id="currentMonth">156 kWh</div>
+                <small>Consumo do mês atual</small>
+            </div>
+            <div class="card">
+                <h3>💰 Tarifas AME - Manaus</h3>
+                <div class="tariff-info">
+                    <div class="tariff-row">
+                        <span><strong>Residencial Normal:</strong></span>
+                        <span>R$ 0,71259/kWh</span>
+                    </div>
+                    <div class="tariff-row">
+                        <span>Taxa de Iluminação:</span>
+                        <span>R$ 8,45</span>
+                    </div>
+                    <div class="tariff-row">
+                        <span>ICMS (até 50 kWh):</span>
+                        <span>12%</span>
+                    </div>
+                    <div class="tariff-row">
+                        <span>ICMS (> 50 kWh):</span>
+                        <span>25%</span>
+                    </div>
+                    <div class="tariff-row">
+                        <span><strong>Bandeira Atual:</strong></span>
+                        <span id="currentFlag">Verde (R$ 0,00)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>📈 Consumo Instantâneo</h3>
+                <div class="meter-display" style="color: #FF6B35;" id="instantPower">2.84 kW</div>
+                <div style="margin: 15px 0;">
+                    <strong>Custo por hora:</strong> R$ <span id="hourCost">2,02</span>
+                </div>
+                <div>
+                    <strong>Projeção diária:</strong> R$ <span id="dailyProjection">48,48</span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>⚡ Consumo por Disjuntor (Circuito)</h3>
+                <div id="circuitsGrid">
+                    </div>
+                <small style="color: #666;">(Baseado nos aparelhos LIGADOS)</small>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" style="margin-bottom: 20px;" onclick="energyAI.showAddDeviceModal()">+ Adicionar Novo Aparelho</button>
+        
+        <div class="device-grid" id="deviceGrid">
+            </div>
+
+        <div class="summary-section">
+            <h3>💡 Resumo de Custos - Mês Atual</h3>
+            <div class="cost-breakdown">
+                <div class="cost-item">
+                    <div class="cost-value" id="totalKwh">156</div>
+                    <div>kWh Consumidos</div>
+                </div>
+                <div class="cost-item">
+                    <div class="cost-value" id="energyCost">R$ 111,16</div>
+                    <div>Custo Energia</div>
+                </div>
+                <div class="cost-item">
+                    <div class="cost-value" id="taxesCost">R$ 27,79</div>
+                    <div>Impostos/Taxas</div>
+                </div>
+                <div class="cost-item">
+                    <div class="cost-value" id="totalCost">R$ 147,40</div>
+                    <div>Total da Conta</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-section">
+            <h3>📈 Histórico de Consumo Mensal</h3>
+            <p style="text-align: center; color: #666; margin-top: 10px;">Compare sua evolução de consumo ao longo dos meses.</p>
+            <canvas id="consumptionChart" width="400" height="200"></canvas>
+            <div style="text-align: center; margin-top: 15px;">
+                <div class="tariff-row">
+                    <span>Mês Anterior:</span>
+                    <span style="font-weight: bold;" id="lastMonthConsumption">130 kWh</span>
+                </div>
+                <div class="tariff-row">
+                    <span>Mês Atual:</span>
+                    <span style="font-weight: bold;" id="currentMonthConsumptionHist">156 kWh</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="recommendations">
+            <h3>🤖 Análise IA - Recomendações Manaus</h3>
+            <div id="recommendationsList">
+                </div>
+        </div>
+    </div>
+
+    <div id="deviceModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:500px; box-shadow:0 5px 20px rgba(0,0,0,0.3);">
+            <h3 id="modalTitle">Adicionar Aparelho</h3>
+            <div class="input-group">
+                <label for="deviceName">Nome do Aparelho:</label>
+                <input type="text" id="deviceName" placeholder="Ex: Ar Condicionado Sala">
+            </div>
+            <div class="input-group">
+                <label for="devicePower">Potência (Watts):</label>
+                <input type="number" id="devicePower" placeholder="1200">
+            </div>
+            <div class="input-group">
+                <label for="deviceHours">Horas de Uso por Dia:</label>
+                <input type="number" id="deviceHours" step="0.5" placeholder="8">
+            </div>
+            <div class="input-group">
+                <label for="deviceIcon">Ícone (Emoji):</label>
+                <input type="text" id="deviceIcon" placeholder="❄️">
+            </div>
+            <div class="input-group">
+                <label for="deviceCategory">Categoria:</label>
+                <input type="text" id="deviceCategory" placeholder="climatização">
+            </div>
+            <button class="btn btn-success" id="saveDeviceBtn">Salvar Aparelho</button>
+            <button class="btn btn-danger" onclick="document.getElementById('deviceModal').style.display='none'">Cancelar</button>
+        </div>
+    </div>
+
+    <script>
+        class EnergyOptimizationAI {
+            constructor() {
+                this.meterReading = 1524;
+                this.lastMonthReading = 1368;
+                this.currentMonthConsumption = 156;
+
+                this.tariffs = {
+                    residential: 0.71259,
+                    publicLighting: 8.45,
+                    icms1: 0.12,
+                    icms2: 0.25,
+                    pis_cofins: 0.0376,
+                    bandeira: {
+                        verde: 0.00,
+                        amarela: 0.01343,
+                        vermelha1: 0.04463,
+                        vermelha2: 0.07877
+                    }
+                };
+                this.currentBandeira = 'verde';
+
+                this.devices = [
+                    { id: 1, name: 'Ar Condicionado Split', icon: '❄️', power: 1200, hoursPerDay: 8, status: 'on', category: 'climatização' },
+                    { id: 2, name: 'Geladeira Frost Free', icon: '🧊', power: 150, hoursPerDay: 24, status: 'on', category: 'refrigeração' },
+                    { id: 3, name: 'Chuveiro Elétrico', icon: '🚿', power: 3200, hoursPerDay: 1, status: 'off', category: 'aquecimento' },
+                    { id: 4, name: 'TV LED 55"', icon: '📺', power: 180, hoursPerDay: 6, status: 'on', category: 'eletrônicos' },
+                    { id: 5, name: 'Máquina de Lavar', icon: '👕', power: 800, hoursPerDay: 1.5, status: 'off', category: 'eletrodomésticos' },
+                    { id: 6, name: 'Iluminação LED', icon: '💡', power: 80, hoursPerDay: 8, status: 'on', category: 'iluminação' },
+                    { id: 7, name: 'Micro-ondas', icon: '🔥', power: 1000, hoursPerDay: 0.5, status: 'off', category: 'cozinha' },
+                    { id: 8, name: 'Ventilador de Teto', icon: '🌀', power: 60, hoursPerDay: 12, status: 'on', category: 'climatização' }
+                ];
+                
+                this.consumptionHistory = [
+                    { month: 'Jan', kwh: 120 },
+                    { month: 'Fev', kwh: 145 },
+                    { month: 'Mar', kwh: 130 },
+                    { month: 'Abr', kwh: 156 }
+                ];
+
+                this.init();
+            }
+
+            init() {
+                this.renderDevices();
+                this.updateAllCalculations();
+                this.generateRecommendations();
+                this.renderConsumptionChart();
+                this.startRealTimeUpdates();
+            }
+
+            updateMeterReading() {
+                const input = document.getElementById('meterReading');
+                this.meterReading = parseInt(input.value) || 1524;
+                this.currentMonthConsumption = this.meterReading - this.lastMonthReading;
+                document.getElementById('currentMonth').textContent = `${this.currentMonthConsumption} kWh`;
+                this.updateAllCalculations();
+            }
+
+            renderDevices() {
+                const grid = document.getElementById('deviceGrid');
+                grid.innerHTML = '';
+                this.devices.forEach(device => {
+                    const deviceCard = this.createDeviceCard(device);
+                    grid.appendChild(deviceCard);
+                });
+            }
+
+            createDeviceCard(device) {
+                const dailyConsumption = (device.power * device.hoursPerDay) / 1000;
+                const monthlyConsumption = dailyConsumption * 30;
+                const dailyCost = this.calculateCost(dailyConsumption);
+                const monthlyCost = this.calculateCost(monthlyConsumption);
+                const card = document.createElement('div');
+                card.className = 'device-card';
+                card.innerHTML = `
+                    <div class="device-header">
+                        <div class="device-info">
+                            <span class="device-icon">${device.icon}</span>
+                            <div class="device-details">
+                                <div class="device-name">${device.name}</div>
+                                <div class="device-specs">
+                                    ${device.power}W × ${device.hoursPerDay}h/dia
+                                </div>
+                            </div>
+                        </div>
+                        <span class="device-status status-${device.status}" onclick="energyAI.toggleDevice(${device.id})">
+                            ${device.status === 'on' ? 'LIGADO' : 'DESLIGADO'}
+                        </span>
+                    </div>
+                    <div class="cost-display">
+                        <div class="daily-cost">R$ ${dailyCost.toFixed(2)}/dia</div>
+                        <div class="monthly-cost">~R$ ${monthlyCost.toFixed(2)}/mês</div>
+                        <div style="margin-top: 5px; font-size: 0.9rem; color: #666;">
+                            ${dailyConsumption.toFixed(2)} kWh/dia | ${monthlyConsumption.toFixed(1)} kWh/mês
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button class="btn btn-primary" onclick="energyAI.optimizeDevice(${device.id})">Otimizar</button>
+                        <button class="btn" style="background: #2196F3;" onclick="energyAI.showAddDeviceModal(${device.id})">Editar</button>
+                        <button class="btn btn-danger" onclick="energyAI.removeDevice(${device.id})">Remover</button>
+                    </div>
+                `;
+                return card;
+            }
+
+            showAddDeviceModal(deviceId = null) {
+                const modal = document.getElementById('deviceModal');
+                const modalTitle = document.getElementById('modalTitle');
+                const saveBtn = document.getElementById('saveDeviceBtn');
+                
+                if (deviceId) {
+                    const device = this.devices.find(d => d.id === deviceId);
+                    if (!device) return;
+                    modalTitle.textContent = 'Editar Aparelho';
+                    document.getElementById('deviceName').value = device.name;
+                    document.getElementById('devicePower').value = device.power;
+                    document.getElementById('deviceHours').value = device.hoursPerDay;
+                    document.getElementById('deviceIcon').value = device.icon;
+                    document.getElementById('deviceCategory').value = device.category;
+                    saveBtn.onclick = () => this.saveDevice(deviceId);
+                } else {
+                    modalTitle.textContent = 'Adicionar Aparelho';
+                    document.getElementById('deviceName').value = '';
+                    document.getElementById('devicePower').value = '';
+                    document.getElementById('deviceHours').value = '';
+                    document.getElementById('deviceIcon').value = '';
+                    document.getElementById('deviceCategory').value = '';
+                    saveBtn.onclick = () => this.saveDevice(null);
+                }
+                modal.style.display = 'flex';
+            }
+
+            saveDevice(deviceId) {
+                const name = document.getElementById('deviceName').value;
+                const power = parseInt(document.getElementById('devicePower').value);
+                const hours = parseFloat(document.getElementById('deviceHours').value);
+                const icon = document.getElementById('deviceIcon').value;
+                const category = document.getElementById('deviceCategory').value;
+
+                if (!name || isNaN(power) || isNaN(hours)) {
+                    alert('Por favor, preencha todos os campos corretamente.');
+                    return;
+                }
+
+                if (deviceId) {
+                    const device = this.devices.find(d => d.id === deviceId);
+                    if (device) {
+                        device.name = name;
+                        device.power = power;
+                        device.hoursPerDay = hours;
+                        device.icon = icon;
+                        device.category = category;
+                    }
+                } else {
+                    const newId = this.devices.length > 0 ? Math.max(...this.devices.map(d => d.id)) + 1 : 1;
+                    this.devices.push({
+                        id: newId,
+                        name: name,
+                        icon: icon,
+                        power: power,
+                        hoursPerDay: hours,
+                        status: 'on',
+                        category: category
+                    });
+                }
+
+                document.getElementById('deviceModal').style.display = 'none';
+                this.renderDevices();
+                this.updateAllCalculations();
+            }
+
+            removeDevice(deviceId) {
+                if (confirm('Tem certeza que deseja remover este aparelho?')) {
+                    this.devices = this.devices.filter(d => d.id !== deviceId);
+                    this.renderDevices();
+                    this.updateAllCalculations();
+                }
+            }
+            
+            toggleDevice(deviceId) {
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) {
+                    device.status = device.status === 'on' ? 'off' : 'on';
+                    this.renderDevices();
+                    this.updateAllCalculations();
+                }
+            }
+
+            optimizeDevice(deviceId) {
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) {
+                    if (device.category === 'climatização') {
+                        device.hoursPerDay = Math.max(6, device.hoursPerDay * 0.8);
+                        this.addRecommendation(`❄️ ${device.name}: Reduzido para ${device.hoursPerDay}h/dia considerando clima de Manaus`);
+                    } else if (device.category === 'aquecimento') {
+                        device.hoursPerDay = Math.max(0.5, device.hoursPerDay * 0.7);
+                        this.addRecommendation(`🚿 ${device.name}: Tempo reduzido para ${device.hoursPerDay}h devido ao clima quente`);
+                    } else {
+                        device.hoursPerDay = Math.max(0.5, device.hoursPerDay * 0.9);
+                        this.addRecommendation(`⚡ ${device.name}: Uso otimizado para ${device.hoursPerDay}h/dia`);
+                    }
+                    this.renderDevices();
+                    this.updateAllCalculations();
+                }
+            }
+
+            calculateCost(kwh) {
+                let cost = kwh * this.tariffs.residential;
+                cost += kwh * this.tariffs.bandeira[this.currentBandeira];
+
+                if (kwh <= 50) {
+                    cost *= (1 + this.tariffs.icms1);
+                } else {
+                    const first50 = 50 * this.tariffs.residential * (1 + this.tariffs.icms1);
+                    const remaining = (kwh - 50) * this.tariffs.residential * (1 + this.tariffs.icms2);
+                    cost = first50 + remaining;
+                }
+                cost *= (1 + this.tariffs.pis_cofins);
+                return cost;
+            }
+
+            updateAllCalculations() {
+                let instantPower = 0;
+                this.devices.forEach(device => {
+                    if (device.status === 'on') {
+                        instantPower += device.power;
+                    }
+                });
+                document.getElementById('instantPower').textContent = `${(instantPower / 1000).toFixed(2)} kW`;
+                document.getElementById('hourCost').textContent = this.calculateCost(instantPower / 1000).toFixed(2);
+                document.getElementById('dailyProjection').textContent = (this.calculateCost(instantPower / 1000) * 24).toFixed(2);
+
+                document.getElementById('totalKwh').textContent = this.currentMonthConsumption;
+                const energyCost = this.currentMonthConsumption * this.tariffs.residential;
+                const totalCost = this.calculateCost(this.currentMonthConsumption) + this.tariffs.publicLighting;
+                const taxesCost = totalCost - energyCost;
+                document.getElementById('energyCost').textContent = `R$ ${energyCost.toFixed(2)}`;
+                document.getElementById('taxesCost').textContent = `R$ ${taxesCost.toFixed(2)}`;
+                document.getElementById('totalCost').textContent = `R$ ${totalCost.toFixed(2)}`;
+
+                this.renderCircuits();
+                document.getElementById('lastMonthConsumption').textContent = `${this.lastMonthReading} kWh`;
+                document.getElementById('currentMonthConsumptionHist').textContent = `${this.currentMonthConsumption} kWh`;
+            }
+
+            renderCircuits() {
+                const circuits = {
+                    'Climatização': ['Ar Condicionado', 'Ventilador'],
+                    'Aquecimento': ['Chuveiro'],
+                    'Cozinha': ['Geladeira', 'Micro-ondas'],
+                    'Eletrônicos': ['TV', 'Iluminação']
+                };
+                const circuitConsumption = {};
+
+                this.devices.forEach(device => {
+                    let circuitName = 'Outros';
+                    for (const [name, keywords] of Object.entries(circuits)) {
+                        if (keywords.some(keyword => device.name.includes(keyword))) {
+                            circuitName = name;
+                            break;
+                        }
+                    }
+                    if (device.status === 'on') {
+                        circuitConsumption[circuitName] = (circuitConsumption[circuitName] || 0) + device.power;
+                    }
+                });
+
+                const circuitsGrid = document.getElementById('circuitsGrid');
+                circuitsGrid.innerHTML = '';
+                for (const [name, power] of Object.entries(circuitConsumption)) {
+                    const row = document.createElement('div');
+                    row.className = 'tariff-row';
+                    row.style.marginBottom = '5px';
+                    row.innerHTML = `
+                        <span>${name}</span>
+                        <span style="font-weight: bold;">${(power / 1000).toFixed(2)} kW</span>
+                    `;
+                    circuitsGrid.appendChild(row);
+                }
+            }
+
+            renderConsumptionChart() {
+                const ctx = document.getElementById('consumptionChart').getContext('2d');
+                const labels = this.consumptionHistory.map(item => item.month);
+                const data = this.consumptionHistory.map(item => item.kwh);
+                
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Consumo (kWh)',
+                            data: data,
+                            borderColor: '#2196F3',
+                            backgroundColor: 'rgba(33, 150, 243, 0.2)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Consumo (kWh)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+
+            generateRecommendations() {
+                const recommendations = [];
+                const totalDailyConsumption = this.devices.reduce((sum, device) => {
+                    if (device.status === 'on') {
+                        return sum + (device.power * device.hoursPerDay) / 1000;
+                    }
+                    return sum;
+                }, 0);
+                if (totalDailyConsumption > 15) {
+                    recommendations.push('⚠️ Alto consumo diário detectado! Acima de 15 kWh/dia pode gerar conta superior a R$ 350/mês');
+                }
+                const acDevice = this.devices.find(d => d.category === 'climatização' && d.name.includes('Ar'));
+                if (acDevice && acDevice.status === 'on' && acDevice.hoursPerDay > 10) {
+                    recommendations.push('🌡️ Clima Manaus: Use ventiladores com AR em temperatura 24°C para economia de até 30%');
+                }
+                const now = new Date().getHours();
+                if (now >= 18 && now <= 21) {
+                    recommendations.push('⏰ Horário de pico! Evite ligar chuveiro elétrico e máquina de lavar agora');
+                }
+                const highConsumptionDevices = this.devices.filter(d => d.status === 'on' && (d.power * d.hoursPerDay) / 1000 > 2 );
+                highConsumptionDevices.forEach(device => {
+                    if (device.category === 'aquecimento') {
+                        recommendations.push(`🚿 ${device.name}: Em Manaus, considere banho morno (economia de 40%)`);
+                    } else if (device.category === 'climatização') {
+                        recommendations.push(`❄️ ${device.name}: Use timer e mantenha ambiente fechado`);
+                    }
+                });
+                recommendations.push('🌱 Manaus: Energia solar rende bem! 300+ dias de sol/ano = economia de 80%');
+                recommendations.push('💡 AME oferece desconto para baixa renda. Verifique se você se qualifica');
+                recommendations.push('📊 Tarifa branca disponível: economia fora do horário de pico (18h-21h)');
+                this.renderRecommendations(recommendations);
+            }
+
+            renderRecommendations(recommendations) {
+                const list = document.getElementById('recommendationsList');
+                list.innerHTML = '';
+                recommendations.forEach(rec => {
+                    const item = document.createElement('div');
+                    item.className = rec.includes('⚠️') || rec.includes('Alto') ? 'recommendation-item high-consumption' : 'recommendation-item';
+                    item.textContent = rec;
+                    list.appendChild(item);
+                });
+            }
+
+            addRecommendation(text) {
+                const list = document.getElementById('recommendationsList');
+                const item = document.createElement('div');
+                item.className = 'recommendation-item';
+                item.textContent = text;
+                list.insertBefore(item, list.firstChild);
+            }
+
+            startRealTimeUpdates() {
+                setInterval(() => {
+                    this.updateAllCalculations();
+                }, 5000);
+                setInterval(() => {
+                    this.generateRecommendations();
+                }, 30000);
+                setInterval(() => {
+                    const flags = ['verde', 'amarela', 'vermelha1'];
+                    const randomFlag = flags[Math.floor(Math.random() * flags.length)];
+                    if (randomFlag !== this.currentBandeira) {
+                        this.currentBandeira = randomFlag;
+                        const flagNames = {
+                            verde: 'Verde (R$ 0,00)',
+                            amarela: 'Amarela (+R$ 0,01343/kWh)',
+                            vermelha1: 'Vermelha P1 (+R$ 0,04463/kWh)'
+                        };
+                        document.getElementById('currentFlag').textContent = flagNames[randomFlag];
+                        this.updateAllCalculations();
+                    }
+                }, 120000);
+            }
+        }
+        const energyAI = new EnergyOptimizationAI();
+    </script>
+</body>
+</html>
