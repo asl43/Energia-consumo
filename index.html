@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EnergyAI Manaus - Otimização Energética AME</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #2E8B57 0%, #228B22 100%); color: #333; min-height: 100vh; }
@@ -20,8 +22,8 @@
         .tariff-row { display: flex; justify-content: space-between; margin: 5px 0; }
         .input-group { margin: 15px 0; }
         .input-group label { display: block; font-weight: bold; margin-bottom: 5px; }
-        .input-group input { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; }
-        .input-group input:focus { border-color: #4CAF50; outline: none; }
+        .input-group input, .input-group textarea, .input-group select { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; }
+        .input-group input:focus, .input-group textarea:focus, .input-group select:focus { border-color: #4CAF50; outline: none; }
         .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .device-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s ease; border-left: 4px solid #4CAF50; }
         .device-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
@@ -44,13 +46,23 @@
         .btn-success { background: #4CAF50; color: white; }
         .btn-danger { background: #f44336; color: white; }
         .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
-        .summary-section { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .section-card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .cost-breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
         .cost-item { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; }
         .cost-value { font-size: 1.5rem; font-weight: bold; color: #2196F3; }
         .recommendations { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
         .recommendation-item { background: #e8f5e8; border-left: 4px solid #4CAF50; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; }
         .high-consumption { border-left-color: #f44336 !important; background: #ffebee; }
+        .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .daily-record { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+        .input-actions { display: flex; justify-content: flex-end; gap: 5px; margin-top: 5px; }
+        .btn-small { padding: 4px 8px; font-size: 0.8em; margin: 0; }
+        .menu-title { font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 15px 25px; background: #f0f0f0; border-radius: 15px; margin-bottom: 10px; }
+        .menu-title:hover { background: #e0e0e0; }
+        .menu-content { display: none; padding: 10px 0; }
+        .menu-icon { transition: transform 0.3s ease; }
+        .menu-title.active .menu-icon { transform: rotate(90deg); }
+
         @media (max-width: 768px) {
             .dashboard { grid-template-columns: 1fr; }
             .device-grid { grid-template-columns: 1fr; }
@@ -59,7 +71,7 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="content-to-pdf">
         <div class="header">
             <h1>⚡ EnergyAI Manaus</h1>
             <p>Sistema Inteligente de Monitoramento Energético - Amazonas</p>
@@ -68,107 +80,429 @@
             </div>
         </div>
 
-        <div class="dashboard">
-            <div class="card meter-reading">
-                <h3>📊 Leitura do Relógio</h3>
+        <div class="section-card">
+            <div class="menu-title" onclick="energyAI.toggleMenu('ownerData')">
+                <span>👤 Dados do Titular da Conta</span>
+                <span class="menu-icon">▶</span>
+            </div>
+            <div class="menu-content" id="ownerData">
                 <div class="input-group">
-                    <label for="meterReading">Leitura Atual (kWh):</label>
-                    <input type="number" id="meterReading" value="1524" onchange="energyAI.updateMeterReading()">
-                </div>
-                <div class="meter-display" id="currentMonth">156 kWh</div>
-                <small>Consumo do mês atual</small>
-            </div>
-            <div class="card">
-                <h3>💰 Tarifas AME - Manaus</h3>
-                <div class="tariff-info">
-                    <div class="tariff-row">
-                        <span><strong>Residencial Normal:</strong></span>
-                        <span>R$ 0,71259/kWh</span>
-                    </div>
-                    <div class="tariff-row">
-                        <span>Taxa de Iluminação:</span>
-                        <span>R$ 8,45</span>
-                    </div>
-                    <div class="tariff-row">
-                        <span>ICMS (até 50 kWh):</span>
-                        <span>12%</span>
-                    </div>
-                    <div class="tariff-row">
-                        <span>ICMS (> 50 kWh):</span>
-                        <span>25%</span>
-                    </div>
-                    <div class="tariff-row">
-                        <span><strong>Bandeira Atual:</strong></span>
-                        <span id="currentFlag">Verde (R$ 0,00)</span>
+                    <label for="ownerName">Nome:</label>
+                    <input type="text" id="ownerName" value="ARNOLD SOUZA LIMA">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('ownerName')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('ownerName', 'ARNOLD SOUZA LIMA')">Corrigir</button>
                     </div>
                 </div>
-            </div>
-            <div class="card">
-                <h3>📈 Consumo Instantâneo</h3>
-                <div class="meter-display" style="color: #FF6B35;" id="instantPower">2.84 kW</div>
-                <div style="margin: 15px 0;">
-                    <strong>Custo por hora:</strong> R$ <span id="hourCost">2,02</span>
-                </div>
-                <div>
-                    <strong>Projeção diária:</strong> R$ <span id="dailyProjection">48,48</span>
-                </div>
-            </div>
-            <div class="card">
-                <h3>⚡ Consumo por Disjuntor (Circuito)</h3>
-                <div id="circuitsGrid">
+                <div class="input-group">
+                    <label for="ownerAddress">Endereço:</label>
+                    <input type="text" id="ownerAddress" value="R. MONTE FELIZ, 50 - COL TERRA NOVA, AME 50">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('ownerAddress')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('ownerAddress', 'R. MONTE FELIZ, 50 - COL TERRA NOVA, AME 50')">Corrigir</button>
                     </div>
-                <small style="color: #666;">(Baseado nos aparelhos LIGADOS)</small>
+                </div>
+                <div class="input-group">
+                    <label for="ownerCep">CEP:</label>
+                    <input type="text" id="ownerCep" value="69.015-603">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('ownerCep')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('ownerCep', '69.015-603')">Corrigir</button>
+                    </div>
+                </div>
+                 <div class="input-group">
+                    <label for="ownerCity">Cidade:</label>
+                    <input type="text" id="ownerCity" value="MANAUS - AM">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('ownerCity')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('ownerCity', 'MANAUS - AM')">Corrigir</button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <button class="btn btn-primary" style="margin-bottom: 20px;" onclick="energyAI.showAddDeviceModal()">+ Adicionar Novo Aparelho</button>
+        <div class="section-card">
+            <div class="menu-title" onclick="energyAI.toggleMenu('consumerData')">
+                <span>🏠 Dados da Unidade Consumidora</span>
+                <span class="menu-icon">▶</span>
+            </div>
+            <div class="menu-content" id="consumerData">
+                <div class="input-group">
+                    <label for="consumerGroup">Grupo:</label>
+                    <input type="text" id="consumerGroup" value="GRUPO B">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('consumerGroup')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('consumerGroup', 'GRUPO B')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="consumerSubclass">Subclasse:</label>
+                    <input type="text" id="consumerSubclass" value="B1 RESIDENCIAL">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('consumerSubclass')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('consumerSubclass', 'B1 RESIDENCIAL')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="consumerSubgroup">Subgrupo:</label>
+                    <input type="text" id="consumerSubgroup" value="RESIDENCIAL">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('consumerSubgroup')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('consumerSubgroup', 'RESIDENCIAL')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="consumerClass">Classe:</label>
+                    <input type="text" id="consumerClass" value="RESIDENCIAL NORMAL">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('consumerClass')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('consumerClass', 'RESIDENCIAL NORMAL')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="consumerConnection">Ligação:</label>
+                    <input type="text" id="consumerConnection" value="BIFASICA">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('consumerConnection')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('consumerConnection', 'BIFASICA')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="meterNumber">Número do Medidor:</label>
+                    <input type="text" id="meterNumber" value="11540255">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('meterNumber')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('meterNumber', '11540255')">Corrigir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="menu-title" onclick="energyAI.toggleMenu('readingData')">
+                <span>🗓️ Dados da Leitura</span>
+                <span class="menu-icon">▶</span>
+            </div>
+            <div class="menu-content" id="readingData">
+                <div class="input-group">
+                    <label for="readingDateAnterior">Leitura Anterior (Data):</label>
+                    <input type="date" id="readingDateAnterior" value="2025-07-14">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('readingDateAnterior')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('readingDateAnterior', '2025-07-14')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="readingDateAtual">Leitura Atual (Data):</label>
+                    <input type="date" id="readingDateAtual" value="2025-08-13">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('readingDateAtual')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('readingDateAtual', '2025-08-13')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="nextReadingDate">Próxima Leitura (Data):</label>
+                    <input type="date" id="nextReadingDate" value="2025-09-12">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('nextReadingDate')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('nextReadingDate', '2025-09-12')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="daysOfConsumption">Dias de Consumo:</label>
+                    <input type="number" id="daysOfConsumption" value="30">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('daysOfConsumption')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('daysOfConsumption', '30')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="emissionDate">Emissão (Data):</label>
+                    <input type="date" id="emissionDate" value="2025-08-12">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('emissionDate')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('emissionDate', '2025-08-12')">Corrigir</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="presentationDate">Apresentação (Data):</label>
+                    <input type="date" id="presentationDate" value="2025-08-20">
+                    <div class="input-actions">
+                        <button class="btn btn-primary btn-small" onclick="energyAI.clearField('presentationDate')">Limpar</button>
+                        <button class="btn btn-success btn-small" onclick="energyAI.restoreField('presentationDate', '2025-08-20')">Corrigir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="menu-title" onclick="energyAI.toggleMenu('dashboard')">
+                <span>📊 Resumo & Medições</span>
+                <span class="menu-icon">▶</span>
+            </div>
+            <div class="menu-content" id="dashboard">
+                <div class="dashboard">
+                    <div class="card meter-reading">
+                        <h3>📊 Leitura do Relógio</h3>
+                        <div class="input-group">
+                            <label for="meterReading">Leitura Atual (kWh):</label>
+                            <input type="number" id="meterReading" value="4131" onchange="energyAI.updateMeterReading()">
+                            <div class="input-actions">
+                                <button class="btn btn-primary btn-small" onclick="energyAI.clearField('meterReading')">Limpar</button>
+                                <button class="btn btn-success btn-small" onclick="energyAI.updateMeterReading()">Corrigir</button>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="lastMonthReading">Leitura Anterior (kWh):</label>
+                            <input type="number" id="lastMonthReading" value="3681" onchange="energyAI.updateMeterReading()">
+                            <div class="input-actions">
+                                <button class="btn btn-primary btn-small" onclick="energyAI.clearField('lastMonthReading')">Limpar</button>
+                                <button class="btn btn-success btn-small" onclick="energyAI.updateMeterReading()">Corrigir</button>
+                            </div>
+                        </div>
+                        <div class="meter-display" id="currentMonth">450 kWh</div>
+                        <small>Consumo do mês atual</small>
+                    </div>
+                    <div class="card">
+                        <h3>🏷️ Código Único</h3>
+                        <div class="input-group">
+                            <label for="uniqueCode">Código:</label>
+                            <input type="text" id="uniqueCode" value="0643046-5">
+                            <div class="input-actions">
+                                <button class="btn btn-primary btn-small" onclick="energyAI.clearField('uniqueCode')">Limpar</button>
+                                <button class="btn btn-success btn-small" onclick="energyAI.restoreField('uniqueCode', '0643046-5')">Corrigir</button>
+                            </div>
+                        </div>
+                        <small>Número para referência e pagamento.</small>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>💰 Tarifas AME - Manaus</h3>
+                        <div class="tariff-info">
+                            <div class="tariff-row">
+                                <span><strong>Residencial Normal:</strong></span>
+                                <span>R$ 0,902464/kWh</span>
+                            </div>
+                            <div class="tariff-row">
+                                <span>Taxa de Iluminação:</span>
+                                <span>R$ 32,00</span>
+                            </div>
+                            <div class="tariff-row">
+                                <span>ICMS (até 50 kWh):</span>
+                                <span>12%</span>
+                            </div>
+                            <div class="tariff-row">
+                                <span>ICMS (> 50 kWh):</span>
+                                <span>25%</span>
+                            </div>
+                            <div class="tariff-row">
+                                <span><strong>Bandeira Atual:</strong></span>
+                                <span id="currentFlag">Vermelha Patamar II (+R$ 0,07877/kWh)</span>
+                                <select id="bandeiraSelect" onchange="energyAI.updateBandeira()">
+                                    <option value="verde">Verde</option>
+                                    <option value="amarela">Amarela</option>
+                                    <option value="vermelha1">Vermelha Patamar I</option>
+                                    <option value="vermelha2" selected>Vermelha Patamar II</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card section-card">
+                        <h3>💡 Resumo de Custos - Mês Atual</h3>
+                        <div class="cost-breakdown">
+                            <div class="cost-item">
+                                <div class="cost-value" id="totalKwh">450</div>
+                                <div>kWh Consumidos</div>
+                            </div>
+                            <div class="cost-item">
+                                <div class="cost-value" id="energyCost">R$ 406,10</div>
+                                <div>Custo Energia</div>
+                            </div>
+                            <div class="cost-item">
+                                <div class="cost-value" id="taxesCost">R$ 211,79</div>
+                                <div>Impostos/Taxas</div>
+                            </div>
+                            <div class="cost-item">
+                                <div class="cost-value" id="totalCost">R$ 617,89</div>
+                                <div>Total da Conta</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card section-card">
+                        <h3>💰 Detalhamento de Tributos</h3>
+                        <div class="tariff-row" style="font-weight: bold;">
+                            <span>Tributo</span>
+                            <span>Base (R$)</span>
+                            <span>Alíquota (%)</span>
+                            <span>Valor (R$)</span>
+                            <span>Ações</span>
+                        </div>
+                        <div class="tariff-row">
+                            <span>ICMS</span>
+                            <input type="text" id="icmsBase" value="388,57" style="width: 80px; text-align: right;">
+                            <input type="text" id="icmsAliquota" value="0,00" style="width: 60px; text-align: right;">
+                            <input type="text" id="icmsValor" value="0,00" style="width: 60px; text-align: right;">
+                            <div class="input-actions" style="margin-top: 0;">
+                                <button class="btn btn-primary btn-small" onclick="energyAI.clearTributo('icms')">Limpar</button>
+                                <button class="btn btn-success btn-small" onclick="energyAI.restoreTributo('icms')">Corrigir</button>
+                            </div>
+                        </div>
+                        <div class="tariff-row">
+                            <span>PIS</span>
+                            <input type="text" id="pisBase" value="0,00" style="width: 80px; text-align: right;">
+                            <input type="text" id="pisAliquota" value="0,60" style="width: 60px; text-align: right;">
+                            <input type="text" id="pisValor" value="2,33" style="width: 60px; text-align: right;">
+                            <div class="input-actions" style="margin-top: 0;">
+                                <button class="btn btn-primary btn-small" onclick="energyAI.clearTributo('pis')">Limpar</button>
+                                <button class="btn btn-success btn-small" onclick="energyAI.restoreTributo('pis')">Corrigir</button>
+                            </div>
+                        </div>
+                        <div class="tariff-row">
+                            <span>COFINS</span>
+                            <input type="text" id="cofinsBase" value="0,00" style="width: 80px; text-align: right;">
+                            <input type="text" id="cofinsAliquota" value="4,90" style="width: 60px; text-align: right;">
+                            <input type="text" id="cofinsValor" value="18,97" style="width: 60px; text-align: right;">
+                            <div class="input-actions" style="margin-top: 0;">
+                                <button class="btn btn-primary btn-small" onclick="energyAI.clearTributo('cofins')">Limpar</button>
+                                <button class="btn btn-success btn-small" onclick="energyAI.restoreTributo('cofins')">Corrigir</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card section-card">
+                        <h3>🚦 Bandeira Tarifária</h3>
+                        <div id="bandeira-list">
+                            <div class="tariff-row" style="font-weight: bold;">
+                                <span>Mês/Ano</span>
+                                <span>Bandeira Tarifária</span>
+                                <span>R$/kWh</span>
+                                <span>Ações</span>
+                            </div>
+                            <div class="tariff-row">
+                                <span>07/2025</span>
+                                <span>Vermelha Patamar II</span>
+                                <span>0,04463</span>
+                                <span><button class="btn btn-danger btn-small" onclick="energyAI.removeBandeira('07/2025')">Remover</button></span>
+                            </div>
+                            <div class="tariff-row">
+                                <span>08/2025</span>
+                                <span>Vermelha Patamar II</span>
+                                <span>0,07877</span>
+                                <span><button class="btn btn-danger btn-small" onclick="energyAI.removeBandeira('08/2025')">Remover</button></span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; display: flex; align-items: center; gap: 5px;">
+                            <input type="text" id="newBandeiraMonth" placeholder="Mês/Ano" style="width: 90px;">
+                            <select id="newBandeiraType" style="width: 140px;">
+                                <option value="verde">Verde</option>
+                                <option value="amarela">Amarela</option>
+                                <option value="vermelha1">Vermelha I</option>
+                                <option value="vermelha2">Vermelha II</option>
+                            </select>
+                            <input type="number" id="newBandeiraValue" placeholder="R$/kWh" step="0.00001" style="width: 90px;">
+                            <button class="btn btn-primary" onclick="energyAI.addBandeira()">Adicionar</button>
+                        </div>
+                    </div>
+
+                    <div class="card section-card">
+                        <h3>📃 Descrição da Conta</h3>
+                        <div class="input-group">
+                            <label for="itensFatura">Itens da Fatura:</label>
+                            <textarea id="itensFatura" rows="10">Consumo: 450 kWh a 0,902464 = R$ 406,10
+Contribuição de Iluminação Pública (COSIP) = R$ 32,00
+Desc. Bandeira Verde (base 388,57) = -R$ 32,82
+Adicional Bandeira Vermelha Patamar 2 = R$ 15,35
+Parcelamento Cosip 1/36 = R$ 10,13
+Juros de Mora Importe/Serviço 07/25-04 = R$ 0,04
+Desc. s/Multa/Juros Parcelam. = R$ -2,43
+Desc. s/Juros Parcelam.Especial 1/36 = R$ -6,43
+PIS (0,60%) = R$ 2,33
+COFINS (4,90%) = R$ 18,97
+Total a pagar = R$ 617,89</textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="card section-card">
+                        <h3>☀️ Acompanhamento Diário do Consumo</h3>
+                        <div class="input-group grid-2col">
+                            <div>
+                                <label for="dailyStartReading">Leitura Inicial (kWh):</label>
+                                <input type="number" id="dailyStartReading" value="4131" onchange="energyAI.updateDailyConsumption()">
+                            </div>
+                            <div>
+                                <label for="dailyEndReading">Leitura Final (kWh):</label>
+                                <input type="number" id="dailyEndReading" value="" onchange="energyAI.updateDailyConsumption()">
+                            </div>
+                        </div>
+                        <div class="tariff-row">
+                            <span>Consumo Diário:</span>
+                            <span id="dailyConsumptionKwh">0 kWh</span>
+                        </div>
+                        <div class="tariff-row">
+                            <span>Custo Diário Estimado:</span>
+                            <span id="dailyCostEstimate">R$ 0,00</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button class="btn btn-success" onclick="energyAI.addDailyRecord()">Registrar Leitura Diária</button>
+                            <button class="btn btn-danger" onclick="energyAI.resetDailyRecords()">Limpar Histórico</button>
+                        </div>
+                        <div id="dailyRecords" style="margin-top: 20px;">
+                            <h4>Histórico:</h4>
+                            <div class="tariff-row" style="font-weight: bold; border-bottom: 2px solid #ccc;">
+                                <span>Data</span>
+                                <span>Consumo (kWh)</span>
+                                <span>Custo (R$)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>📈 Consumo Instantâneo</h3>
+                        <div class="meter-display" style="color: #FF6B35;" id="instantPower">2.84 kW</div>
+                        <div style="margin: 15px 0;">
+                            <strong>Custo por hora:</strong> R$ <span id="hourCost">2,02</span>
+                        </div>
+                        <div>
+                            <strong>Projeção diária:</strong> R$ <span id="dailyProjection">48,48</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>⚡ Consumo por Disjuntor (Circuito)</h3>
+                        <div id="circuitsGrid">
+                            </div>
+                        <small style="color: #666;">(Baseado nos aparelhos LIGADOS)</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="menu-title" onclick="energyAI.toggleMenu('devices')">
+                <span>🔌 Meus Aparelhos Elétricos</span>
+                <span class="menu-icon">▶</span>
+            </div>
+            <div class="menu-content" id="devices">
+                <button class="btn btn-primary" style="margin-bottom: 20px;" onclick="energyAI.showAddDeviceModal()">+ Adicionar Novo Aparelho</button>
+                <div class="device-grid" id="deviceGrid">
+                </div>
+            </div>
+        </div>
         
-        <div class="device-grid" id="deviceGrid">
+        <div class="section-card">
+            <div class="menu-title" onclick="energyAI.toggleMenu('recommendations')">
+                <span>🤖 Análise IA & Recomendações</span>
+                <span class="menu-icon">▶</span>
             </div>
-
-        <div class="summary-section">
-            <h3>💡 Resumo de Custos - Mês Atual</h3>
-            <div class="cost-breakdown">
-                <div class="cost-item">
-                    <div class="cost-value" id="totalKwh">156</div>
-                    <div>kWh Consumidos</div>
-                </div>
-                <div class="cost-item">
-                    <div class="cost-value" id="energyCost">R$ 111,16</div>
-                    <div>Custo Energia</div>
-                </div>
-                <div class="cost-item">
-                    <div class="cost-value" id="taxesCost">R$ 27,79</div>
-                    <div>Impostos/Taxas</div>
-                </div>
-                <div class="cost-item">
-                    <div class="cost-value" id="totalCost">R$ 147,40</div>
-                    <div>Total da Conta</div>
+            <div class="menu-content" id="recommendations">
+                <div id="recommendationsList">
                 </div>
             </div>
         </div>
 
-        <div class="summary-section">
-            <h3>📈 Histórico de Consumo Mensal</h3>
-            <p style="text-align: center; color: #666; margin-top: 10px;">Compare sua evolução de consumo ao longo dos meses.</p>
-            <canvas id="consumptionChart" width="400" height="200"></canvas>
-            <div style="text-align: center; margin-top: 15px;">
-                <div class="tariff-row">
-                    <span>Mês Anterior:</span>
-                    <span style="font-weight: bold;" id="lastMonthConsumption">130 kWh</span>
-                </div>
-                <div class="tariff-row">
-                    <span>Mês Atual:</span>
-                    <span style="font-weight: bold;" id="currentMonthConsumptionHist">156 kWh</span>
-                </div>
-            </div>
-        </div>
+        <button class="btn btn-success" style="margin: 20px;" onclick="energyAI.generatePDF()">Gerar Relatório em PDF</button>
 
-        <div class="recommendations">
-            <h3>🤖 Análise IA - Recomendações Manaus</h3>
-            <div id="recommendationsList">
-                </div>
-        </div>
     </div>
 
     <div id="deviceModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
@@ -200,18 +534,17 @@
     </div>
 
     <script>
+        const { jsPDF } = window.jspdf;
         class EnergyOptimizationAI {
             constructor() {
-                this.meterReading = 1524;
-                this.lastMonthReading = 1368;
-                this.currentMonthConsumption = 156;
+                this.meterReading = 4131;
+                this.lastMonthReading = 3681;
+                this.currentMonthConsumption = 450;
+                this.dailyRecords = [];
 
                 this.tariffs = {
-                    residential: 0.71259,
-                    publicLighting: 8.45,
-                    icms1: 0.12,
-                    icms2: 0.25,
-                    pis_cofins: 0.0376,
+                    residential: 0.902464,
+                    publicLighting: 32.00,
                     bandeira: {
                         verde: 0.00,
                         amarela: 0.01343,
@@ -219,8 +552,17 @@
                         vermelha2: 0.07877
                     }
                 };
-                this.currentBandeira = 'verde';
-
+                this.currentBandeira = 'vermelha2';
+                this.bandeiraHistory = [
+                    { month: '07/2025', type: 'vermelha2', value: 0.04463 },
+                    { month: '08/2025', type: 'vermelha2', value: 0.07877 }
+                ];
+                this.tributoDefaults = {
+                    icms: { base: '388,57', aliquota: '0,00', valor: '0,00' },
+                    pis: { base: '0,00', aliquota: '0,60', valor: '2,33' },
+                    cofins: { base: '0,00', aliquota: '4,90', valor: '18,97' }
+                };
+                
                 this.devices = [
                     { id: 1, name: 'Ar Condicionado Split', icon: '❄️', power: 1200, hoursPerDay: 8, status: 'on', category: 'climatização' },
                     { id: 2, name: 'Geladeira Frost Free', icon: '🧊', power: 150, hoursPerDay: 24, status: 'on', category: 'refrigeração' },
@@ -232,13 +574,6 @@
                     { id: 8, name: 'Ventilador de Teto', icon: '🌀', power: 60, hoursPerDay: 12, status: 'on', category: 'climatização' }
                 ];
                 
-                this.consumptionHistory = [
-                    { month: 'Jan', kwh: 120 },
-                    { month: 'Fev', kwh: 145 },
-                    { month: 'Mar', kwh: 130 },
-                    { month: 'Abr', kwh: 156 }
-                ];
-
                 this.init();
             }
 
@@ -246,16 +581,192 @@
                 this.renderDevices();
                 this.updateAllCalculations();
                 this.generateRecommendations();
-                this.renderConsumptionChart();
+                this.setInitialBandeira();
+                this.renderBandeiraHistory();
                 this.startRealTimeUpdates();
+            }
+            
+            toggleMenu(id) {
+                const menuContent = document.getElementById(id);
+                const menuTitle = menuContent.previousElementSibling;
+                if (menuContent.style.display === 'block') {
+                    menuContent.style.display = 'none';
+                    menuTitle.classList.remove('active');
+                } else {
+                    menuContent.style.display = 'block';
+                    menuTitle.classList.add('active');
+                }
+            }
+
+            clearField(id) {
+                document.getElementById(id).value = '';
+            }
+
+            restoreField(id, originalValue) {
+                document.getElementById(id).value = originalValue;
+            }
+
+            clearTributo(tributo) {
+                document.getElementById(`${tributo}Base`).value = '';
+                document.getElementById(`${tributo}Aliquota`).value = '';
+                document.getElementById(`${tributo}Valor`).value = '';
+            }
+
+            restoreTributo(tributo) {
+                document.getElementById(`${tributo}Base`).value = this.tributoDefaults[tributo].base;
+                document.getElementById(`${tributo}Aliquota`).value = this.tributoDefaults[tributo].aliquota;
+                document.getElementById(`${tributo}Valor`).value = this.tributoDefaults[tributo].valor;
+            }
+
+            setInitialBandeira() {
+                const bandeiraSelect = document.getElementById('bandeiraSelect');
+                bandeiraSelect.value = this.currentBandeira;
+            }
+
+            updateBandeira() {
+                const bandeiraSelect = document.getElementById('bandeiraSelect');
+                this.currentBandeira = bandeiraSelect.value;
+                const flagNames = {
+                    verde: 'Verde (R$ 0,00)',
+                    amarela: 'Amarela (+R$ 0,01343/kWh)',
+                    vermelha1: 'Vermelha Patamar I (+R$ 0,04463/kWh)',
+                    vermelha2: 'Vermelha Patamar II (+R$ 0,07877/kWh)'
+                };
+                document.getElementById('currentFlag').textContent = flagNames[this.currentBandeira];
+                this.updateAllCalculations();
             }
 
             updateMeterReading() {
-                const input = document.getElementById('meterReading');
-                this.meterReading = parseInt(input.value) || 1524;
+                const meterInput = document.getElementById('meterReading');
+                const lastMonthInput = document.getElementById('lastMonthReading');
+                
+                this.meterReading = parseInt(meterInput.value) || this.meterReading;
+                this.lastMonthReading = parseInt(lastMonthInput.value) || this.lastMonthReading;
+
                 this.currentMonthConsumption = this.meterReading - this.lastMonthReading;
                 document.getElementById('currentMonth').textContent = `${this.currentMonthConsumption} kWh`;
                 this.updateAllCalculations();
+            }
+            
+            updateDailyConsumption() {
+                const startReading = parseFloat(document.getElementById('dailyStartReading').value);
+                const endReading = parseFloat(document.getElementById('dailyEndReading').value);
+                if (startReading && endReading && endReading >= startReading) {
+                    const dailyConsumption = endReading - startReading;
+                    document.getElementById('dailyConsumptionKwh').textContent = `${dailyConsumption.toFixed(2)} kWh`;
+                    const dailyCost = dailyConsumption * this.tariffs.residential + (dailyConsumption * this.tariffs.bandeira[this.currentBandeira]);
+                    document.getElementById('dailyCostEstimate').textContent = `R$ ${dailyCost.toFixed(2)}`;
+                } else {
+                    document.getElementById('dailyConsumptionKwh').textContent = `0 kWh`;
+                    document.getElementById('dailyCostEstimate').textContent = `R$ 0,00`;
+                }
+            }
+
+            addDailyRecord() {
+                const startReading = parseFloat(document.getElementById('dailyStartReading').value);
+                const endReading = parseFloat(document.getElementById('dailyEndReading').value);
+                if (startReading && endReading && endReading >= startReading) {
+                    const dailyConsumption = endReading - startReading;
+                    const dailyCost = dailyConsumption * this.tariffs.residential + (dailyConsumption * this.tariffs.bandeira[this.currentBandeira]);
+                    const today = new Date().toLocaleDateString('pt-BR');
+                    this.dailyRecords.push({ date: today, kwh: dailyConsumption, cost: dailyCost });
+                    
+                    this.renderDailyRecords();
+
+                    document.getElementById('dailyStartReading').value = endReading;
+                    document.getElementById('dailyEndReading').value = '';
+                    this.updateDailyConsumption();
+                } else {
+                    alert('Por favor, insira leituras válidas para o início e fim do dia.');
+                }
+            }
+
+            resetDailyRecords() {
+                this.dailyRecords = [];
+                this.renderDailyRecords();
+            }
+
+            renderDailyRecords() {
+                const recordsList = document.getElementById('dailyRecords');
+                recordsList.innerHTML = `
+                    <h4>Histórico:</h4>
+                    <div class="tariff-row" style="font-weight: bold; border-bottom: 2px solid #ccc;">
+                        <span>Data</span>
+                        <span>Consumo (kWh)</span>
+                        <span>Custo (R$)</span>
+                    </div>
+                `;
+                this.dailyRecords.forEach(record => {
+                    const newRecordDiv = document.createElement('div');
+                    newRecordDiv.className = 'daily-record';
+                    newRecordDiv.innerHTML = `
+                        <span>${record.date}</span>
+                        <span>${record.kwh.toFixed(2)} kWh</span>
+                        <span>R$ ${record.cost.toFixed(2)}</span>
+                    `;
+                    recordsList.appendChild(newRecordDiv);
+                });
+            }
+            
+            removeBandeira(month) {
+                this.bandeiraHistory = this.bandeiraHistory.filter(b => b.month !== month);
+                this.renderBandeiraHistory();
+            }
+
+            addBandeira() {
+                const monthInput = document.getElementById('newBandeiraMonth').value;
+                const typeInput = document.getElementById('newBandeiraType').value;
+                const valueInput = document.getElementById('newBandeiraValue').value;
+
+                if (!monthInput || !typeInput) {
+                    alert('Por favor, preencha o mês/ano e selecione a bandeira.');
+                    return;
+                }
+
+                let bandeiraValue;
+                if (valueInput !== '') {
+                    bandeiraValue = parseFloat(valueInput);
+                } else {
+                    bandeiraValue = this.tariffs.bandeira[typeInput];
+                }
+
+                const newBandeira = {
+                    month: monthInput,
+                    type: typeInput,
+                    value: bandeiraValue
+                };
+                this.bandeiraHistory.push(newBandeira);
+                this.renderBandeiraHistory();
+                
+                document.getElementById('newBandeiraMonth').value = '';
+                document.getElementById('newBandeiraType').value = 'verde';
+                document.getElementById('newBandeiraValue').value = '';
+            }
+
+            renderBandeiraHistory() {
+                const bandeiraList = document.getElementById('bandeira-list');
+                bandeiraList.innerHTML = `
+                    <div class="tariff-row" style="font-weight: bold;">
+                        <span>Mês/Ano</span>
+                        <span>Bandeira Tarifária</span>
+                        <span>R$/kWh</span>
+                        <span>Ações</span>
+                    </div>
+                `;
+                this.bandeiraHistory.forEach(b => {
+                    const row = document.createElement('div');
+                    row.className = 'tariff-row';
+                    const bandeiraText = {
+                        verde: 'Verde', amarela: 'Amarela', vermelha1: 'Vermelha Patamar I', vermelha2: 'Vermelha Patamar II'
+                    };
+                    row.innerHTML = `
+                        <span>${b.month}</span>
+                        <span>${bandeiraText[b.type]}</span>
+                        <span>${b.value.toFixed(5)}</span>
+                        <span><button class="btn btn-danger btn-small" onclick="energyAI.removeBandeira('${b.month}')">Remover</button></span>
+                    `;
+                    bandeiraList.appendChild(row);
+                });
             }
 
             renderDevices() {
@@ -270,8 +781,8 @@
             createDeviceCard(device) {
                 const dailyConsumption = (device.power * device.hoursPerDay) / 1000;
                 const monthlyConsumption = dailyConsumption * 30;
-                const dailyCost = this.calculateCost(dailyConsumption);
-                const monthlyCost = this.calculateCost(monthlyConsumption);
+                const dailyCost = this.calculateInstantCost(dailyConsumption);
+                const monthlyCost = this.calculateInstantCost(monthlyConsumption);
                 const card = document.createElement('div');
                 card.className = 'device-card';
                 card.innerHTML = `
@@ -406,19 +917,8 @@
                 }
             }
 
-            calculateCost(kwh) {
-                let cost = kwh * this.tariffs.residential;
-                cost += kwh * this.tariffs.bandeira[this.currentBandeira];
-
-                if (kwh <= 50) {
-                    cost *= (1 + this.tariffs.icms1);
-                } else {
-                    const first50 = 50 * this.tariffs.residential * (1 + this.tariffs.icms1);
-                    const remaining = (kwh - 50) * this.tariffs.residential * (1 + this.tariffs.icms2);
-                    cost = first50 + remaining;
-                }
-                cost *= (1 + this.tariffs.pis_cofins);
-                return cost;
+            calculateInstantCost(kwh) {
+                return kwh * this.tariffs.residential + (kwh * this.tariffs.bandeira[this.currentBandeira]);
             }
 
             updateAllCalculations() {
@@ -429,20 +929,22 @@
                     }
                 });
                 document.getElementById('instantPower').textContent = `${(instantPower / 1000).toFixed(2)} kW`;
-                document.getElementById('hourCost').textContent = this.calculateCost(instantPower / 1000).toFixed(2);
-                document.getElementById('dailyProjection').textContent = (this.calculateCost(instantPower / 1000) * 24).toFixed(2);
+                document.getElementById('hourCost').textContent = (this.calculateInstantCost(instantPower / 1000)).toFixed(2);
+                document.getElementById('dailyProjection').textContent = (this.calculateInstantCost(instantPower / 1000) * 24).toFixed(2);
 
+                this.currentMonthConsumption = this.meterReading - this.lastMonthReading;
                 document.getElementById('totalKwh').textContent = this.currentMonthConsumption;
-                const energyCost = this.currentMonthConsumption * this.tariffs.residential;
-                const totalCost = this.calculateCost(this.currentMonthConsumption) + this.tariffs.publicLighting;
-                const taxesCost = totalCost - energyCost;
+                
+                const energyCost = 406.10;
+                const taxesCost = 211.79;
+                const totalCost = energyCost + taxesCost;
+
                 document.getElementById('energyCost').textContent = `R$ ${energyCost.toFixed(2)}`;
                 document.getElementById('taxesCost').textContent = `R$ ${taxesCost.toFixed(2)}`;
                 document.getElementById('totalCost').textContent = `R$ ${totalCost.toFixed(2)}`;
 
                 this.renderCircuits();
-                document.getElementById('lastMonthConsumption').textContent = `${this.lastMonthReading} kWh`;
-                document.getElementById('currentMonthConsumptionHist').textContent = `${this.currentMonthConsumption} kWh`;
+                this.updateDailyConsumption();
             }
 
             renderCircuits() {
@@ -481,75 +983,24 @@
                 }
             }
 
-            renderConsumptionChart() {
-                const ctx = document.getElementById('consumptionChart').getContext('2d');
-                const labels = this.consumptionHistory.map(item => item.month);
-                const data = this.consumptionHistory.map(item => item.kwh);
-                
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Consumo (kWh)',
-                            data: data,
-                            borderColor: '#2196F3',
-                            backgroundColor: 'rgba(33, 150, 243, 0.2)',
-                            tension: 0.4,
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Consumo (kWh)'
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
-                            }
-                        }
-                    }
-                });
-            }
-
             generateRecommendations() {
                 const recommendations = [];
-                const totalDailyConsumption = this.devices.reduce((sum, device) => {
-                    if (device.status === 'on') {
-                        return sum + (device.power * device.hoursPerDay) / 1000;
-                    }
-                    return sum;
-                }, 0);
-                if (totalDailyConsumption > 15) {
-                    recommendations.push('⚠️ Alto consumo diário detectado! Acima de 15 kWh/dia pode gerar conta superior a R$ 350/mês');
+                if (this.currentMonthConsumption > 350) {
+                    recommendations.push('🚨 Fatura alta detectada! Seu consumo de 450 kWh é muito elevado para uma residência. Foco em reduzir.');
                 }
                 const acDevice = this.devices.find(d => d.category === 'climatização' && d.name.includes('Ar'));
-                if (acDevice && acDevice.status === 'on' && acDevice.hoursPerDay > 10) {
-                    recommendations.push('🌡️ Clima Manaus: Use ventiladores com AR em temperatura 24°C para economia de até 30%');
+                if (acDevice && acDevice.status === 'on' && acDevice.hoursPerDay > 8) {
+                    recommendations.push('🌡️ Em Manaus, o Ar Condicionado é o maior vilão! Reduza o tempo de uso para no máximo 6-8 horas por dia.');
                 }
-                const now = new Date().getHours();
-                if (now >= 18 && now <= 21) {
-                    recommendations.push('⏰ Horário de pico! Evite ligar chuveiro elétrico e máquina de lavar agora');
+                const highConsumptionDevices = this.devices.filter(d => d.status === 'on' && (d.power * d.hoursPerDay) / 1000 > 5);
+                if (highConsumptionDevices.length > 0) {
+                    highConsumptionDevices.forEach(device => {
+                        recommendations.push(`🔥 Atenção! O aparelho "${device.name}" é um dos que mais consomem. Considere reduzir seu uso ou trocá-lo por um modelo mais eficiente.`);
+                    });
                 }
-                const highConsumptionDevices = this.devices.filter(d => d.status === 'on' && (d.power * d.hoursPerDay) / 1000 > 2 );
-                highConsumptionDevices.forEach(device => {
-                    if (device.category === 'aquecimento') {
-                        recommendations.push(`🚿 ${device.name}: Em Manaus, considere banho morno (economia de 40%)`);
-                    } else if (device.category === 'climatização') {
-                        recommendations.push(`❄️ ${device.name}: Use timer e mantenha ambiente fechado`);
-                    }
-                });
-                recommendations.push('🌱 Manaus: Energia solar rende bem! 300+ dias de sol/ano = economia de 80%');
-                recommendations.push('💡 AME oferece desconto para baixa renda. Verifique se você se qualifica');
-                recommendations.push('📊 Tarifa branca disponível: economia fora do horário de pico (18h-21h)');
+                recommendations.push('💡 Verifique se não há vazamentos de energia (aparelhos em stand-by) e se todos os eletrodomésticos estão em boas condições.');
+                recommendations.push('📊 A bandeira tarifária Vermelha Patamar II encarece muito a conta. O foco deve ser na redução total do consumo para evitar essa tarifa.');
+                recommendations.push('☀️ Considere a instalação de painéis solares para economizar até 80% da sua conta a longo prazo. O sol de Manaus é um grande aliado!');
                 this.renderRecommendations(recommendations);
             }
 
@@ -558,7 +1009,7 @@
                 list.innerHTML = '';
                 recommendations.forEach(rec => {
                     const item = document.createElement('div');
-                    item.className = rec.includes('⚠️') || rec.includes('Alto') ? 'recommendation-item high-consumption' : 'recommendation-item';
+                    item.className = rec.includes('🚨') || rec.includes('Atenção') ? 'recommendation-item high-consumption' : 'recommendation-item';
                     item.textContent = rec;
                     list.appendChild(item);
                 });
@@ -579,20 +1030,33 @@
                 setInterval(() => {
                     this.generateRecommendations();
                 }, 30000);
-                setInterval(() => {
-                    const flags = ['verde', 'amarela', 'vermelha1'];
-                    const randomFlag = flags[Math.floor(Math.random() * flags.length)];
-                    if (randomFlag !== this.currentBandeira) {
-                        this.currentBandeira = randomFlag;
-                        const flagNames = {
-                            verde: 'Verde (R$ 0,00)',
-                            amarela: 'Amarela (+R$ 0,01343/kWh)',
-                            vermelha1: 'Vermelha P1 (+R$ 0,04463/kWh)'
-                        };
-                        document.getElementById('currentFlag').textContent = flagNames[randomFlag];
-                        this.updateAllCalculations();
+            }
+
+            generatePDF() {
+                const doc = new jsPDF('p', 'pt', 'a4');
+                const content = document.getElementById('content-to-pdf');
+                
+                html2canvas(content, {
+                    scale: 2
+                }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgWidth = 595.28;
+                    const pageHeight = 841.89;
+                    const imgHeight = canvas.height * imgWidth / canvas.width;
+                    let heightLeft = imgHeight;
+                    let position = 0;
+                    
+                    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                    
+                    while (heightLeft >= 0) {
+                        position = heightLeft - imgHeight;
+                        doc.addPage();
+                        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
                     }
-                }, 120000);
+                    doc.save('relatorio_energyai.pdf');
+                });
             }
         }
         const energyAI = new EnergyOptimizationAI();
